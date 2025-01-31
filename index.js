@@ -139,10 +139,12 @@ async function setupProxyGroups(tokens, proxies) {
 
 // 토큰별 다음 프록시 가져오기
 function getNextProxyForToken(token) {
-  const proxyGroup = config.proxyGroups[token];
-  if (!proxyGroup || proxyGroup.length === 0) return null;
+  if (!token || !config.proxyGroups || !config.proxyGroups[token]) {
+    return config.proxies[0]; // 기본값으로 첫 번째 프록시 반환
+  }
   
-  const currentIndex = config.currentProxyIndices[token];
+  const proxyGroup = config.proxyGroups[token];
+  const currentIndex = config.currentProxyIndices[token] || 0;
   const proxy = proxyGroup[currentIndex];
   
   // 다음 인덱스로 순환
@@ -153,31 +155,14 @@ function getNextProxyForToken(token) {
 
 // 프록시 에이전트 생성 함수 수정
 async function createProxyAgent(token) {
+  if (!config.proxy.enabled) return undefined;
+  
   const proxyUrl = getNextProxyForToken(token);
   if (!proxyUrl) return undefined;
 
-  try {
-    if (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://')) {
-      return new HttpsProxyAgent({
-        proxy: proxyUrl,
-        timeout: config.proxy.timeout,
-        keepAlive: true,
-        maxFreeSockets: 256,
-        maxSockets: 256
-      });
-    } else {
-      const type = proxyUrl.startsWith('socks4://') ? 4 : 5;
-      return new SocksProxyAgent({
-        proxy: proxyUrl,
-        timeout: config.proxy.timeout,
-        keepAlive: true,
-        type: type
-      });
-    }
-  } catch (error) {
-    logger.error(`프록시 에이전트 생성 실패: ${error.message}`);
-    return undefined;
-  }
+  // http:// 제거 후 다시 생성
+  const cleanUrl = proxyUrl.replace('http://', '');
+  return new HttpsProxyAgent(`http://${cleanUrl}`);
 }
 
 // Check proxy availability
@@ -254,6 +239,27 @@ async function initConfig() {
   if (proxyFileExists) {
     logger.success('proxy.txt에서 프록시 설정을 로드했습니다');
     config.proxy.enabled = true;
+    
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+
+    logger.info(`\n프록시 분배 방식 안내:`);
+    logger.info(`- 총 토큰 수: ${config.tokens.length}개`);
+    logger.info(`- 총 프록시 수: ${config.proxies.length}개`);
+    logger.info(`- 토큰당 기본 할당: ${Math.floor(config.proxies.length / config.tokens.length)}개`);
+    if (config.proxies.length % config.tokens.length > 0) {
+      logger.info(`- 마지막 토큰에는 나머지 ${config.proxies.length % config.tokens.length}개가 추가로 할당됩니다`);
+    }
+    
+    await new Promise((resolve) => {
+      rl.question('\n위 분배 방식으로 진행합니다. 확인하셨으면 엔터를 눌러주세요.', () => {
+        rl.close();
+        resolve();
+      });
+    });
+    
     await setupProxyGroups(config.tokens, config.proxies);
   } else {
     const rl = readline.createInterface({
@@ -648,8 +654,8 @@ async function main() {
       
       // 계정 간 딜레이 추가
       if (i < config.tokens.length - 1) {
-        logger.info('다음 계정 처리까지 30초 대기 중...');
-        await new Promise(resolve => setTimeout(resolve, 30000));
+        logger.info('다음 계정 처리까지 5초 대기 중...');
+        await new Promise(resolve => setTimeout(resolve, 5000));
       }
     }
     
