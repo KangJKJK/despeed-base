@@ -70,26 +70,30 @@ async function loadProxyFromFile() {
       .filter(line => line && !line.startsWith('#'));
     
     if (proxies.length === 0) {
+      logger.error('proxy.txt 파일에 유효한 프록시가 없습니다');
       return null;
     }
 
+    // 프록시 URL 형식 변환
     config.proxies = proxies.map(proxyUrl => {
-      if (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://')) {
-        return proxyUrl;
-      } else if (proxyUrl.startsWith('socks4://')) {
-        return proxyUrl;
-      } else if (proxyUrl.startsWith('socks5://')) {
-        return proxyUrl;
-      } else {
+      // smartproxy 형식을 http 프록시 URL로 변환
+      if (!proxyUrl.startsWith('http://') && !proxyUrl.startsWith('https://')) {
         return `http://${proxyUrl}`;
       }
+      return proxyUrl;
     });
 
-    logger.success(`${config.proxies.length}개의 프록시를 로드했습니다`);
+    logger.success(`${config.proxies.length}개의 프록시를 성공적으로 로드했습니다`);
+    logger.info('프록시 형식 예시:');
+    logger.info(`- 원본: ${proxies[0]}`);
+    logger.info(`- 변환: ${config.proxies[0]}`);
+    
     config.proxy.enabled = true;
     return true;
   } catch (error) {
-    if (error.code !== 'ENOENT') {
+    if (error.code === 'ENOENT') {
+      logger.error('proxy.txt 파일을 찾을 수 없습니다');
+    } else {
       logger.error(`프록시 파일 읽기 오류: ${error.message}`);
     }
     return null;
