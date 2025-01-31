@@ -96,61 +96,36 @@ async function loadProxyFromFile() {
   }
 }
 
-// 프록시 그룹 설정 함수 추가
+// 프록시 그룹 설정 함수 수정
 async function setupProxyGroups(tokens, proxies) {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-
-  const question = (query) => new Promise((resolve) => rl.question(query, resolve));
+  if (!proxies || proxies.length === 0) {
+    logger.error('사용 가능한 프록시가 없습니다');
+    return;
+  }
 
   logger.info(`토큰 수: ${tokens.length}, 프록시 수: ${proxies.length}`);
   
-  const distribution = await question(
-    kleur.cyan('프록시 분배 방식을 선택하세요:\n') +
-    kleur.white('1. 균등 분배 (프록시를 토큰별로 동일하게 나눔)\n') +
-    kleur.white('2. 수동 설정 (토큰당 프록시 수를 직접 지정)\n') +
-    kleur.cyan('선택 (1 또는 2): ')
-  );
-
-  if (distribution === '1') {
-    const proxiesPerToken = Math.floor(proxies.length / tokens.length);
-    tokens.forEach((token, index) => {
-      const start = index * proxiesPerToken;
-      const end = index === tokens.length - 1 ? proxies.length : start + proxiesPerToken;
-      config.proxyGroups[token] = proxies.slice(start, end);
-      config.currentProxyIndices[token] = 0;
-    });
-  } else {
-    for (let i = 0; i < tokens.length; i++) {
-      const count = parseInt(await question(
-        kleur.cyan(`토큰 ${i + 1}번에 할당할 프록시 수를 입력하세요 (최대 ${proxies.length}개): `)
-      ));
-
-      if (isNaN(count) || count < 1 || count > proxies.length) {
-        logger.error('잘못된 숫자입니다. 다시 시도해주세요.');
-        i--;
-        continue;
-      }
-
-      const availableProxies = proxies.filter(p => 
-        !Object.values(config.proxyGroups).flat().includes(p)
-      );
-
-      if (availableProxies.length < count) {
-        logger.error('사용 가능한 프록시가 부족합니다.');
-        i--;
-        continue;
-      }
-
-      config.proxyGroups[tokens[i]] = availableProxies.slice(0, count);
-      config.currentProxyIndices[tokens[i]] = 0;
-    }
-  }
-
-  rl.close();
+  // 토큰당 프록시 개수 계산 (균등 분배)
+  const proxiesPerToken = Math.floor(proxies.length / tokens.length);
+  const remainingProxies = proxies.length % tokens.length;
   
+  logger.info('프록시 분배 방식:');
+  logger.info(`- 각 토큰당 기본 할당: ${proxiesPerToken}개`);
+  if (remainingProxies > 0) {
+    logger.info(`- 마지막 토큰에 추가 할당될 프록시: ${remainingProxies}개`);
+    logger.info(`- 마지막 토큰의 총 프록시 수: ${proxiesPerToken + remainingProxies}개`);
+  }
+  
+  tokens.forEach((token, index) => {
+    const startIndex = index * proxiesPerToken;
+    const endIndex = index === tokens.length - 1 
+      ? proxies.length  // 마지막 토큰은 남은 모든 프록시 할당
+      : startIndex + proxiesPerToken;
+    
+    config.proxyGroups[token] = proxies.slice(startIndex, endIndex);
+    config.currentProxyIndices[token] = 0;
+  });
+
   // 설정된 그룹 정보 출력
   logger.success('프록시 그룹 설정 완료:');
   tokens.forEach((token, index) => {
