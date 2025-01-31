@@ -7,7 +7,7 @@ const crypto = require('crypto');
 const fs = require('fs').promises;
 const kleur = require('kleur');
 
-// Configuration
+// 설정
 const config = {
   tokens: [],
   proxies: [],
@@ -24,7 +24,7 @@ const config = {
   }
 };
 
-// Modern console output helper
+// 현대적인 콘솔 출력 도우미
 const logger = {
   info: (msg) => console.log(kleur.blue('ℹ'), kleur.white(msg)),
   success: (msg) => console.log(kleur.green('✔'), kleur.white(msg)),
@@ -36,7 +36,7 @@ const logger = {
   network: (msg) => console.log(kleur.blue('🌐'), kleur.white(msg))
 };
 
-// Read tokens from file
+// 파일에서 토큰 읽기
 async function loadTokensFromFile() {
   try {
     const content = await fs.readFile('token.txt', 'utf8');
@@ -45,50 +45,52 @@ async function loadTokensFromFile() {
       .filter(line => line && !line.startsWith('#'));
     
     if (tokens.length === 0) {
-      throw new Error('No valid tokens found in token.txt');
+      throw new Error('token.txt에서 유효한 토큰을 찾을 수 없습니다');
     }
     
     config.tokens = tokens;
-    logger.success(`Loaded ${tokens.length} tokens from token.txt`);
+    logger.success(`token.txt에서 ${tokens.length}개의 토큰을 로드했습니다`);
     return true;
   } catch (error) {
     if (error.code === 'ENOENT') {
-      logger.error('token.txt file not found');
+      logger.error('token.txt 파일을 찾을 수 없습니다');
     } else {
-      logger.error(`Error reading token file: ${error.message}`);
+      logger.error(`토큰 파일 읽기 오류: ${error.message}`);
     }
     return false;
   }
 }
 
-// Read proxy from file
+// 파일에서 프록시 읽기
 async function loadProxyFromFile() {
   try {
     const proxyContent = await fs.readFile('proxy.txt', 'utf8');
-    const proxyUrl = proxyContent.trim();
+    const proxies = proxyContent.split('\n')
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith('#'));
     
-    if (!proxyUrl) {
+    if (proxies.length === 0) {
       return null;
     }
 
-    if (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://')) {
-      config.proxy.type = 'http';
-      config.proxy.url = proxyUrl;
-    } else if (proxyUrl.startsWith('socks4://')) {
-      config.proxy.type = 'socks4';
-      config.proxy.url = proxyUrl;
-    } else if (proxyUrl.startsWith('socks5://')) {
-      config.proxy.type = 'socks5';
-      config.proxy.url = proxyUrl;
-    } else {
-      config.proxy.type = 'http';
-      config.proxy.url = `http://${proxyUrl}`;
-    }
+    config.proxies = proxies.map(proxyUrl => {
+      if (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://')) {
+        return proxyUrl;
+      } else if (proxyUrl.startsWith('socks4://')) {
+        return proxyUrl;
+      } else if (proxyUrl.startsWith('socks5://')) {
+        return proxyUrl;
+      } else {
+        return `http://${proxyUrl}`;
+      }
+    });
 
+    logger.success(`${config.proxies.length}개의 프록시를 로드했습니다`);
+    config.proxy.enabled = true;
     return true;
   } catch (error) {
     if (error.code !== 'ENOENT') {
-      logger.error(`Error reading proxy file: ${error.message}`);
+      logger.error(`프록시 파일 읽기 오류: ${error.message}`);
     }
     return null;
   }
@@ -260,18 +262,18 @@ function generateRandomLocation() {
   };
 }
 
-// Initialize configuration
+// 설정 초기화
 async function initConfig() {
   logger.info('설정 초기화 중...');
 
   const tokensLoaded = await loadTokensFromFile();
   if (!tokensLoaded) {
-    throw new Error('token.txt 파일에서 토큰을 로드하는데 실패했습니다.');
+    throw new Error('token.txt 파일에서 토큰을 로드하는데 실패했습니다');
   }
 
   const proxyFileExists = await loadProxyFromFile();
   if (proxyFileExists) {
-    logger.success('proxy.txt에서 프록시 설정을 로드했습니다.');
+    logger.success('proxy.txt에서 프록시 설정을 로드했습니다');
     config.proxy.enabled = true;
     await setupProxyGroups(config.tokens, config.proxies);
   } else {
@@ -282,10 +284,10 @@ async function initConfig() {
 
     const question = (query) => new Promise((resolve) => rl.question(query, resolve));
 
-    const useProxy = (await question(kleur.cyan('Use proxy? (y/n): '))).toLowerCase() === 'y';
+    const useProxy = (await question(kleur.cyan('프록시를 사용하시겠습니까? (y/n): '))).toLowerCase() === 'y';
     if (useProxy) {
       config.proxy.enabled = true;
-      const proxyUrl = await question(kleur.cyan('Enter proxy URL (e.g., http://user:pass@ip:port or socks5://ip:port): '));
+      const proxyUrl = await question(kleur.cyan('프록시 URL을 입력하세요 (예: http://user:pass@ip:port 또는 socks5://ip:port): '));
       config.proxy.url = proxyUrl;
       
       if (proxyUrl.startsWith('socks4://')) {
@@ -297,19 +299,19 @@ async function initConfig() {
       }
     }
 
-    const interval = await question(kleur.cyan('Enter check interval (minutes, default 1): '));
+    const interval = await question(kleur.cyan('검사 간격을 입력하세요 (분, 기본값 1): '));
     config.checkInterval = (parseInt(interval) || 1) * 60000;
 
     rl.close();
   }
 
-  logger.success('Configuration completed!');
-  logger.info('Current settings:');
-  const safeConfig = {...config, tokens: `${config.tokens.length} tokens loaded`};
+  logger.success('설정이 완료되었습니다!');
+  logger.info('현재 설정:');
+  const safeConfig = {...config, tokens: `${config.tokens.length}개의 토큰이 로드됨`};
   console.log(kleur.gray(JSON.stringify(safeConfig, null, 2)));
 }
 
-// Get common headers
+// 일반적인 헤더 가져오기
 function getCommonHeaders(token) {
   return {
     'Authorization': `Bearer ${token}`,
@@ -326,16 +328,16 @@ function getCommonHeaders(token) {
   };
 }
 
-// Validate token
+// 토큰 유효성 검사
 async function validateToken(token) {
   if (!token) {
-    throw new Error('Token not found');
+    throw new Error('토큰을 찾을 수 없습니다');
   }
   
   try {
     const tokenData = JSON.parse(atob(token.split('.')[1]));
     if ((tokenData.exp - 90) * 1000 < Date.now()) {
-      throw new Error('Token expired');
+      throw new Error('토큰이 만료되었습니다');
     }
 
     const proxyAgent = await getProxyAgent(token);
@@ -346,20 +348,20 @@ async function validateToken(token) {
     });
 
     if (!profileResponse.ok) {
-      throw new Error('Token invalid');
+      throw new Error('유효하지 않은 토큰입니다');
     }
 
     return true;
   } catch (error) {
-    logger.error(`Token validation failed: ${error.message}`);
+    logger.error(`토큰 검증 실패: ${error.message}`);
     return false;
   }
 }
 
-// Perform speed test
+// 속도 테스트 수행
 async function performSpeedTest() {
   try {
-    logger.network('Starting network speed measurement...');
+    logger.network('네트워크 속도 측정을 시작합니다...');
     
     const metadata = {
       client_name: 'speed-measurementlab-net-1',
@@ -371,29 +373,29 @@ async function performSpeedTest() {
     const locateUrl = new URL('https://locate.measurementlab.net/v2/nearest/ndt/ndt7');
     locateUrl.search = new URLSearchParams(metadata).toString();
     
-    logger.info('Locating speed test server...');
+    logger.info('속도 테스트 서버를 찾는 중...');
     const locateResponse = await fetch(locateUrl, {
       agent: proxyAgent,
       timeout: 30000
     });
 
     if (!locateResponse.ok) {
-      throw new Error(`Failed to get speed test server: ${locateResponse.status}`);
+      throw new Error(`속도 테스트 서버 찾기 실패: ${locateResponse.status}`);
     }
 
     const serverData = await locateResponse.json();
     if (!serverData.results || !serverData.results[0]) {
-      throw new Error('No available speed test server');
+      throw new Error('사용 가능한 속도 테스트 서버가 없습니다');
     }
 
     const server = serverData.results[0];
-    logger.success(`Selected server: ${server.machine}`);
+    logger.success(`선택된 서버: ${server.machine}`);
 
     const downloadUrl = server.urls['wss:///ndt/v7/download'];
     const uploadUrl = server.urls['wss:///ndt/v7/upload'];
 
-    // Download test
-    logger.network('Starting download test...');
+    // 다운로드 테스트
+    logger.network('다운로드 테스트 시작...');
     let downloadSpeed = 0;
     await new Promise((resolve) => {
       const wsOptions = config.proxy.enabled ? {
@@ -435,8 +437,8 @@ async function performSpeedTest() {
       });
     });
 
-    // Upload test with fixes
-    logger.network('Starting upload test...');
+    // 업로드 테스트
+    logger.network('업로드 테스트 시작...');
     let uploadSpeed = 0;
     await new Promise((resolve) => {
       const wsOptions = config.proxy.enabled ? {
@@ -536,14 +538,15 @@ async function performSpeedTest() {
     return { downloadSpeed, uploadSpeed };
 
   } catch (error) {
-    logger.error(`Speed test error: ${error.message}`);
+    logger.error(`속도 테스트 오류: ${error.message}`);
     return { downloadSpeed: 0, uploadSpeed: 0 };
   }
 }
 
+// 결과 보고
 async function reportResults(token, downloadSpeed, uploadSpeed, location) {
   try {
-    logger.info('Submitting test results...');
+    logger.info('테스트 결과를 제출하는 중...');
 
     const proxyAgent = await getProxyAgent(token);
     const response = await fetch(`${config.baseUrl}/v1/api/points`, {
@@ -564,28 +567,28 @@ async function reportResults(token, downloadSpeed, uploadSpeed, location) {
     });
 
     if (!response.ok) {
-      throw new Error(`Report failed: ${response.status}`);
+      throw new Error(`결과 제출 실패: ${response.status}`);
     }
     
     const data = await response.json();
     
     if (data.success) {
-      logger.success('Results submitted successfully');
+      logger.success('결과가 성공적으로 제출되었습니다');
       return data;
     } else {
-      throw new Error(data.message || 'Report failed');
+      throw new Error(data.message || '결과 제출 실패');
     }
 
   } catch (error) {
-    logger.error(`Error submitting results: ${error.message}`);
+    logger.error(`결과 제출 오류: ${error.message}`);
     return null;
   }
 }
 
-// Display account information
+// 계정 정보 표시
 async function displayAccountInfo(token) {
   try {
-    logger.info('\n=== Account Information ===');
+    logger.info('\n=== 계정 정보 ===');
     
     const proxyAgent = await getProxyAgent(token);
     const profileResponse = await fetch(`${config.baseUrl}/v1/api/auth/profile`, {
@@ -596,109 +599,109 @@ async function displayAccountInfo(token) {
 
     if (profileResponse.ok) {
       const profile = await profileResponse.json();
-      logger.info(`Username: ${profile.data.username || "Not set"}`);
-      logger.info(`Email: ${profile.data.email || "Not set"}`);
+      logger.info(`사용자명: ${profile.data.username || "설정되지 않음"}`);
+      logger.info(`이메일: ${profile.data.email || "설정되지 않음"}`);
     }
     
-    logger.info('=== ==================== ===\n');
+    logger.info('=== ============ ===\n');
   } catch (error) {
-    logger.error(`Failed to get account information: ${error.message}`);
+    logger.error(`계정 정보 가져오기 실패: ${error.message}`);
   }
 }
 
-// Process single account
+// 단일 계정 처리
 async function processAccount(token, accountIndex) {
   try {
-    logger.info(`\n=== Processing Account ${accountIndex + 1} ===`);
-    logger.time(`Time: ${new Date().toLocaleString()}`);
+    logger.info(`\n=== 계정 ${accountIndex + 1} 처리 중 ===`);
+    logger.time(`시간: ${new Date().toLocaleString()}`);
     
     const isValid = await validateToken(token);
     if (!isValid) {
-      logger.error(`Token ${accountIndex + 1} is invalid or expired`);
+      logger.error(`토큰 ${accountIndex + 1}이(가) 유효하지 않거나 만료되었습니다`);
       return false;
     }
-    logger.success(`Token ${accountIndex + 1} validation successful`);
+    logger.success(`토큰 ${accountIndex + 1} 검증 성공`);
     
     await displayAccountInfo(token);
     
     const location = generateRandomLocation();
-    logger.location(`Speed test location: ${location.latitude}, ${location.longitude}`);
+    logger.location(`속도 테스트 위치: ${location.latitude}, ${location.longitude}`);
     
-    logger.network('Starting speed test...');
+    logger.network('속도 테스트 시작...');
     const { downloadSpeed, uploadSpeed } = await performSpeedTest();
-    logger.speed(`Final Download speed: ${downloadSpeed.toFixed(2)} Mbps`);
-    logger.speed(`Final Upload speed: ${uploadSpeed.toFixed(2)} Mbps`);
+    logger.speed(`최종 다운로드 속도: ${downloadSpeed.toFixed(2)} Mbps`);
+    logger.speed(`최종 업로드 속도: ${uploadSpeed.toFixed(2)} Mbps`);
     
     const result = await reportResults(token, downloadSpeed, uploadSpeed, location);
     
     if (result && result.success) {
-      logger.success('Speed test completed and results reported');
+      logger.success('속도 테스트 완료 및 결과 보고됨');
       return true;
     } else {
-      logger.error('Failed to report results');
+      logger.error('결과 보고 실패');
       if (result && result.message) {
-        logger.error(`Failure reason: ${result.message}`);
+        logger.error(`실패 이유: ${result.message}`);
       }
       return false;
     }
     
   } catch (error) {
-    logger.error(`Error processing account ${accountIndex + 1}: ${error.message}`);
+    logger.error(`계정 ${accountIndex + 1} 처리 중 오류 발생: ${error.message}`);
     if (error.response) {
       try {
         const errorData = await error.response.json();
-        logger.error(`Server response: ${JSON.stringify(errorData)}`);
+        logger.error(`서버 응답: ${JSON.stringify(errorData)}`);
       } catch {
-        logger.error(`Status code: ${error.response.status}`);
+        logger.error(`상태 코드: ${error.response.status}`);
       }
     }
     return false;
   }
 }
 
-// Main loop
+// 메인 루프
 async function main() {
   try {
-    logger.info('\n=== Starting multi-account speed test ===');
+    logger.info('\n=== 다중 계정 속도 테스트 시작 ===');
     
     for (let i = 0; i < config.tokens.length; i++) {
       await processAccount(config.tokens[i], i);
       
-      // Add delay between accounts
+      // 계정 간 딜레이 추가
       if (i < config.tokens.length - 1) {
-        logger.info('Waiting 30 seconds before processing next account...');
+        logger.info('다음 계정 처리까지 30초 대기 중...');
         await new Promise(resolve => setTimeout(resolve, 30000));
       }
     }
     
   } catch (error) {
-    logger.error(`Error during main loop: ${error.message}`);
+    logger.error(`메인 루프 중 오류 발생: ${error.message}`);
   } finally {
     const nextTime = new Date(Date.now() + config.checkInterval);
-    logger.time(`Next test cycle scheduled for: ${nextTime.toLocaleString()}`);
-    logger.info(`Interval: ${Math.round(config.checkInterval / 1000 / 60)} minutes`);
-    logger.info('=== Speed test cycle complete ===\n');
+    logger.time(`다음 테스트 주기 예정 시간: ${nextTime.toLocaleString()}`);
+    logger.info(`간격: ${Math.round(config.checkInterval / 1000 / 60)}분`);
+    logger.info('=== 속도 테스트 주기 완료 ===\n');
     setTimeout(main, config.checkInterval);
   }
 }
 
-// Handle process exit
+// 프로세스 종료 처리
 process.on('SIGINT', () => {
-  logger.warning('\nReceived exit signal');
+  logger.warning('\n종료 신호를 받았습니다');
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  logger.warning('\nReceived terminate signal');
+  logger.warning('\n종료 신호를 받았습니다');
   process.exit(0);
 });
 
-// Start the program
+// 프로그램 시작
 console.clear();
-logger.info('Initializing Multi-Account DeSpeed Test Client...');
+logger.info('다중 계정 DeSpeed 테스트 클라이언트 초기화 중...');
 initConfig().then(() => {
   main();
 }).catch(error => {
-  logger.error(`Initialization error: ${error.message}`);
+  logger.error(`초기화 오류: ${error.message}`);
   process.exit(1);
 });
